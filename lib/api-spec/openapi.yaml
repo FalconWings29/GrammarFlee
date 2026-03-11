@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: mangle
+    description: GrammarFlee text mangling operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /mangle:
+    post:
+      operationId: mangleText
+      tags: [mangle]
+      summary: Mangle text with chaos
+      description: Sends text to Claude AI to intentionally destroy grammar, spelling, punctuation, and word order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MangleRequest"
+      responses:
+        "200":
+          description: Successfully mangled text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MangleResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +65,98 @@ components:
           type: string
       required:
         - status
-
+    MangleRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The original clean text to mangle
+        spellingChaos:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Intensity of spelling destruction (0-100)
+        punctuationChaos:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Intensity of punctuation destruction (0-100)
+        grammarChaos:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Intensity of grammar destruction (0-100)
+        wordOrderChaos:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Intensity of word order destruction (0-100)
+        apiKey:
+          type: string
+          description: Anthropic API key provided by user
+      required:
+        - text
+        - spellingChaos
+        - punctuationChaos
+        - grammarChaos
+        - wordOrderChaos
+        - apiKey
+    MangleResponse:
+      type: object
+      properties:
+        destroyedText:
+          type: string
+          description: The fully mangled text string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/MangleError"
+          description: Array of error annotations
+        chaosScore:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall chaos score calculated by the AI
+      required:
+        - destroyedText
+        - errors
+        - chaosScore
+    MangleError:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [spelling, punctuation, grammar, wordOrder]
+          description: Type of error introduced
+        original:
+          type: string
+          description: The original word/phrase
+        destroyed:
+          type: string
+          description: The mangled replacement
+        explanation:
+          type: string
+          description: Sarcastic explanation of why this change is "better"
+        startIndex:
+          type: number
+          description: Character start index in destroyedText
+        length:
+          type: number
+          description: Length of the destroyed span in characters
+      required:
+        - type
+        - original
+        - destroyed
+        - explanation
+        - startIndex
+        - length
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message

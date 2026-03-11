@@ -1,0 +1,11 @@
+packages:
+  "framer-motion": "Required for smooth chaotic animations and glowing transitions"
+
+images:
+  - path: "artifacts/grammarflee/public/images/bg-noise.png"
+    description: "Extremely subtle dark static noise texture, very low opacity, near black, to give the background a slightly gritty feel"
+    aspect_ratio: "16:9"
+
+notes:
+  - The API uses the POST /api/mangle route via the pre-generated useMangleText hook.
+  - The app requires an Anthropic API Key which is kept purely in React state.

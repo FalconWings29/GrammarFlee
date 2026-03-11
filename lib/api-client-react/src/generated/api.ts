@@ -5,18 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ErrorResponse,
+  HealthStatus,
+  MangleRequest,
+  MangleResponse,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +107,90 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Sends text to Claude AI to intentionally destroy grammar, spelling, punctuation, and word order
+ * @summary Mangle text with chaos
+ */
+export const getMangleTextUrl = () => {
+  return `/api/mangle`;
+};
+
+export const mangleText = async (
+  mangleRequest: MangleRequest,
+  options?: RequestInit,
+): Promise<MangleResponse> => {
+  return customFetch<MangleResponse>(getMangleTextUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(mangleRequest),
+  });
+};
+
+export const getMangleTextMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mangleText>>,
+    TError,
+    { data: BodyType<MangleRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof mangleText>>,
+  TError,
+  { data: BodyType<MangleRequest> },
+  TContext
+> => {
+  const mutationKey = ["mangleText"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof mangleText>>,
+    { data: BodyType<MangleRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return mangleText(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MangleTextMutationResult = NonNullable<
+  Awaited<ReturnType<typeof mangleText>>
+>;
+export type MangleTextMutationBody = BodyType<MangleRequest>;
+export type MangleTextMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Mangle text with chaos
+ */
+export const useMangleText = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mangleText>>,
+    TError,
+    { data: BodyType<MangleRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof mangleText>>,
+  TError,
+  { data: BodyType<MangleRequest> },
+  TContext
+> => {
+  return useMutation(getMangleTextMutationOptions(options));
+};

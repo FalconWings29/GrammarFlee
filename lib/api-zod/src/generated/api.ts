@@ -14,3 +14,76 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Sends text to Claude AI to intentionally destroy grammar, spelling, punctuation, and word order
+ * @summary Mangle text with chaos
+ */
+export const mangleTextBodySpellingChaosMin = 0;
+export const mangleTextBodySpellingChaosMax = 100;
+
+export const mangleTextBodyPunctuationChaosMin = 0;
+export const mangleTextBodyPunctuationChaosMax = 100;
+
+export const mangleTextBodyGrammarChaosMin = 0;
+export const mangleTextBodyGrammarChaosMax = 100;
+
+export const mangleTextBodyWordOrderChaosMin = 0;
+export const mangleTextBodyWordOrderChaosMax = 100;
+
+export const MangleTextBody = zod.object({
+  text: zod.string().describe("The original clean text to mangle"),
+  spellingChaos: zod
+    .number()
+    .min(mangleTextBodySpellingChaosMin)
+    .max(mangleTextBodySpellingChaosMax)
+    .describe("Intensity of spelling destruction (0-100)"),
+  punctuationChaos: zod
+    .number()
+    .min(mangleTextBodyPunctuationChaosMin)
+    .max(mangleTextBodyPunctuationChaosMax)
+    .describe("Intensity of punctuation destruction (0-100)"),
+  grammarChaos: zod
+    .number()
+    .min(mangleTextBodyGrammarChaosMin)
+    .max(mangleTextBodyGrammarChaosMax)
+    .describe("Intensity of grammar destruction (0-100)"),
+  wordOrderChaos: zod
+    .number()
+    .min(mangleTextBodyWordOrderChaosMin)
+    .max(mangleTextBodyWordOrderChaosMax)
+    .describe("Intensity of word order destruction (0-100)"),
+  apiKey: zod.string().describe("Anthropic API key provided by user"),
+});
+
+export const mangleTextResponseChaosScoreMin = 0;
+export const mangleTextResponseChaosScoreMax = 100;
+
+export const MangleTextResponse = zod.object({
+  destroyedText: zod.string().describe("The fully mangled text string"),
+  errors: zod
+    .array(
+      zod.object({
+        type: zod
+          .enum(["spelling", "punctuation", "grammar", "wordOrder"])
+          .describe("Type of error introduced"),
+        original: zod.string().describe("The original word\/phrase"),
+        destroyed: zod.string().describe("The mangled replacement"),
+        explanation: zod
+          .string()
+          .describe('Sarcastic explanation of why this change is \"better\"'),
+        startIndex: zod
+          .number()
+          .describe("Character start index in destroyedText"),
+        length: zod
+          .number()
+          .describe("Length of the destroyed span in characters"),
+      }),
+    )
+    .describe("Array of error annotations"),
+  chaosScore: zod
+    .number()
+    .min(mangleTextResponseChaosScoreMin)
+    .max(mangleTextResponseChaosScoreMax)
+    .describe("Overall chaos score calculated by the AI"),
+});

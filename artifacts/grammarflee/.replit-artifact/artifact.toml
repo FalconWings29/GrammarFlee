@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "GrammarFlee"
+version = "1.0.0"
+id = "artifacts/grammarflee"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 18568
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/grammarflee run dev"
+
+[services.env]
+PORT = "18568"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/grammarflee", "run", "build"]
+publicDir = "artifacts/grammarflee/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

@@ -8,3 +8,80 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface MangleRequest {
+  /** The original clean text to mangle */
+  text: string;
+  /**
+   * Intensity of spelling destruction (0-100)
+   * @minimum 0
+   * @maximum 100
+   */
+  spellingChaos: number;
+  /**
+   * Intensity of punctuation destruction (0-100)
+   * @minimum 0
+   * @maximum 100
+   */
+  punctuationChaos: number;
+  /**
+   * Intensity of grammar destruction (0-100)
+   * @minimum 0
+   * @maximum 100
+   */
+  grammarChaos: number;
+  /**
+   * Intensity of word order destruction (0-100)
+   * @minimum 0
+   * @maximum 100
+   */
+  wordOrderChaos: number;
+  /** Anthropic API key provided by user */
+  apiKey: string;
+}
+
+/**
+ * Type of error introduced
+ */
+export type MangleErrorType =
+  (typeof MangleErrorType)[keyof typeof MangleErrorType];
+
+export const MangleErrorType = {
+  spelling: "spelling",
+  punctuation: "punctuation",
+  grammar: "grammar",
+  wordOrder: "wordOrder",
+} as const;
+
+export interface MangleError {
+  /** Type of error introduced */
+  type: MangleErrorType;
+  /** The original word/phrase */
+  original: string;
+  /** The mangled replacement */
+  destroyed: string;
+  /** Sarcastic explanation of why this change is "better" */
+  explanation: string;
+  /** Character start index in destroyedText */
+  startIndex: number;
+  /** Length of the destroyed span in characters */
+  length: number;
+}
+
+export interface MangleResponse {
+  /** The fully mangled text string */
+  destroyedText: string;
+  /** Array of error annotations */
+  errors: MangleError[];
+  /**
+   * Overall chaos score calculated by the AI
+   * @minimum 0
+   * @maximum 100
+   */
+  chaosScore: number;
+}
+
+export interface ErrorResponse {
+  error: string;
+  message: string;
+}
