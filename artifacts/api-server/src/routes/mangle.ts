@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { MangleTextBody, MangleTextResponse } from "@workspace/api-zod";
-import { z } from "zod";
 
 const router: IRouter = Router();
+
+const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
 
 const SYSTEM_PROMPT = `You are GrammarFlee, the world's most enthusiastic language destroyer. Your mission is to take clean, well-written text and gleefully corrupt it according to the chaos levels specified by the user.
 
@@ -47,7 +48,7 @@ router.post("/mangle", async (req, res) => {
     return;
   }
 
-  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos, apiKey } =
+  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos } =
     parseResult.data;
 
   if (!text.trim()) {
@@ -57,8 +58,6 @@ router.post("/mangle", async (req, res) => {
     });
     return;
   }
-
-  const client = new Anthropic({ apiKey });
 
   const userPrompt = `Please mangle the following text with these chaos levels:
 - Spelling chaos: ${spellingChaos}/100
@@ -71,61 +70,88 @@ Text to mangle:
 ${text}
 """
 
-Remember: return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore". No markdown, no code blocks.`;
+Remember: return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore". No markdown, no code blocks, no explanation.`;
 
   try {
-    const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20240620",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
+    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        stream: false,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        options: {
+          temperature: 0.8,
+          num_predict: 4096,
+        },
+      }),
     });
 
-    const rawContent = message.content[0];
-    if (rawContent.type !== "text") {
-      res.status(500).json({
-        error: "unexpected_response",
-        message: "AI returned unexpected content type",
+    if (!ollamaRes.ok) {
+      const errText = await ollamaRes.text();
+      res.status(502).json({
+        error: "ollama_error",
+        message: `Ollama returned ${ollamaRes.status}: ${errText}`,
       });
       return;
     }
 
+    const ollamaData = (await ollamaRes.json()) as {
+      message?: { content?: string };
+      error?: string;
+    };
+
+    if (ollamaData.error) {
+      res.status(502).json({
+        error: "ollama_model_error",
+        message: ollamaData.error,
+      });
+      return;
+    }
+
+    const rawText = ollamaData.message?.content ?? "";
+
     let parsed: unknown;
     try {
-      const jsonText = rawContent.text.trim();
-      parsed = JSON.parse(jsonText);
+      parsed = JSON.parse(rawText.trim());
     } catch {
-      const jsonMatch = rawContent.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         res.status(500).json({
           error: "parse_error",
-          message: "AI response was not valid JSON",
+          message: "Model response was not valid JSON. Try again or use a larger model.",
         });
         return;
       }
-      parsed = JSON.parse(jsonMatch[0]);
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        res.status(500).json({
+          error: "parse_error",
+          message: "Could not parse JSON from model response.",
+        });
+        return;
+      }
     }
 
     const validatedResult = MangleTextResponse.safeParse(parsed);
     if (!validatedResult.success) {
       res.status(500).json({
         error: "schema_error",
-        message: "AI response did not match expected schema: " + validatedResult.error.message,
+        message: "Model response did not match expected schema: " + validatedResult.error.message,
       });
       return;
     }
 
     res.json(validatedResult.data);
   } catch (err: unknown) {
-    if (err instanceof Anthropic.AuthenticationError) {
-      res.status(400).json({
-        error: "invalid_api_key",
-        message: "Invalid Anthropic API key. Please check your key and try again.",
-      });
-    } else if (err instanceof Anthropic.RateLimitError) {
-      res.status(429).json({
-        error: "rate_limit",
-        message: "Rate limit exceeded. Please wait a moment before trying again.",
+    if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("ECONNREFUSED"))) {
+      res.status(503).json({
+        error: "ollama_unreachable",
+        message: `Cannot reach Ollama at ${OLLAMA_HOST}. Make sure Ollama is running and try again.`,
       });
     } else if (err instanceof Error) {
       res.status(500).json({

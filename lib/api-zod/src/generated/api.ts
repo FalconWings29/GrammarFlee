@@ -53,7 +53,6 @@ export const MangleTextBody = zod.object({
     .min(mangleTextBodyWordOrderChaosMin)
     .max(mangleTextBodyWordOrderChaosMax)
     .describe("Intensity of word order destruction (0-100)"),
-  apiKey: zod.string().describe("Anthropic API key provided by user"),
 });
 
 export const mangleTextResponseChaosScoreMin = 0;

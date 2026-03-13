@@ -1,3 +1,17 @@
+# GrammarFlee — The Anti-Grammarly
+
+## Overview
+
+GrammarFlee intentionally destroys text using a local Ollama LLM. It features a split-pane dark-mode UI with chaos sliders, squiggly-underlined error annotations, and a sidebar showing a Chaos Meter and Linguistic Health score.
+
+### Ollama Configuration
+
+The backend calls Ollama at `http://localhost:11434` by default. Override with environment variables:
+- `OLLAMA_HOST` — Ollama base URL (e.g. `http://my-host:11434`)
+- `OLLAMA_MODEL` — Model name (default: `llama3.2`)
+
+---
+
 # Workspace
 
 ## Overview

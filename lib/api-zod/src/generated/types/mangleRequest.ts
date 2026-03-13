@@ -33,6 +33,4 @@ export interface MangleRequest {
    * @maximum 100
    */
   wordOrderChaos: number;
-  /** Anthropic API key provided by user */
-  apiKey: string;
 }

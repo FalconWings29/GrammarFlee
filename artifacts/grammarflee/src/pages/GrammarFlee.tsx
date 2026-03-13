@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Zap, Lock, AlertTriangle, Type, PenTool, BookOpen, Shuffle,
-  Activity, X, ChevronRight, Eye
+  Zap, AlertTriangle, Type, PenTool, BookOpen, Shuffle,
+  Activity, X, ChevronRight
 } from "lucide-react";
 
 interface MangleError {
@@ -438,22 +438,16 @@ export default function GrammarFlee() {
     grammar: 50,
     wordOrder: 50,
   });
-  const [apiKey, setApiKey] = useState("");
   const [result, setResult] = useState<MangleResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeError, setActiveError] = useState<ActiveError | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleMangle = useCallback(async () => {
     if (!inputText.trim()) {
       setError("Please enter some text to destroy.");
-      return;
-    }
-    if (!apiKey.trim()) {
-      setError("Please enter your Anthropic API key.");
       return;
     }
 
@@ -472,7 +466,6 @@ export default function GrammarFlee() {
           punctuationChaos: sliders.punctuation,
           grammarChaos: sliders.grammar,
           wordOrderChaos: sliders.wordOrder,
-          apiKey,
         }),
       });
 
@@ -489,7 +482,7 @@ export default function GrammarFlee() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputText, sliders, apiKey]);
+  }, [inputText, sliders]);
 
   const handleErrorClick = useCallback((err: MangleError, x: number, y: number) => {
     setActiveError((prev) =>
@@ -519,26 +512,9 @@ export default function GrammarFlee() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Lock className="w-3.5 h-3.5 text-[hsl(220,8%,50%)]" />
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              placeholder="sk-ant-... (Anthropic API Key)"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="text-xs bg-[hsl(220,12%,12%)] border border-[hsl(220,10%,20%)] rounded-lg px-3 py-1.5 w-64 text-[hsl(30,10%,80%)] placeholder:text-[hsl(220,8%,40%)] focus:outline-none focus:border-[#ff6600] focus:ring-1 focus:ring-[#ff660033] transition-colors"
-            />
-            <button
-              onClick={() => setShowApiKey((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(220,8%,45%)] hover:text-[hsl(30,10%,70%)] transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {apiKey && (
-            <div className="w-2 h-2 rounded-full bg-[#33cc66] shadow-[0_0_6px_#33cc66]" />
-          )}
+        <div className="flex items-center gap-2 text-xs text-[hsl(220,8%,45%)]">
+          <div className="w-2 h-2 rounded-full bg-[#33cc66] shadow-[0_0_6px_#33cc66]" />
+          <span>Powered by Ollama</span>
         </div>
       </header>
 

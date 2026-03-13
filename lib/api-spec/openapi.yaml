@@ -91,16 +91,12 @@ components:
           minimum: 0
           maximum: 100
           description: Intensity of word order destruction (0-100)
-        apiKey:
-          type: string
-          description: Anthropic API key provided by user
       required:
         - text
         - spellingChaos
         - punctuationChaos
         - grammarChaos
         - wordOrderChaos
-        - apiKey
     MangleResponse:
       type: object
       properties:
