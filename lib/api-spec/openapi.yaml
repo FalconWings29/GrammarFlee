@@ -91,20 +91,12 @@ components:
           minimum: 0
           maximum: 100
           description: Intensity of word order destruction (0-100)
-        apiKey:
-          type: string
-          description: HuggingFace API token
-        model:
-          type: string
-          description: HuggingFace model ID
       required:
         - text
         - spellingChaos
         - punctuationChaos
         - grammarChaos
         - wordOrderChaos
-        - apiKey
-        - model
     MangleResponse:
       type: object
       properties:

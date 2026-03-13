@@ -4,6 +4,8 @@ import { MangleTextBody, MangleTextResponse } from "@workspace/api-zod";
 const router: IRouter = Router();
 
 const HF_BASE = "https://api-inference.huggingface.co/models";
+const HF_TOKEN = process.env.HF_TOKEN ?? "";
+const HF_MODEL = process.env.HF_MODEL ?? "mistralai/Mistral-7B-Instruct-v0.3";
 
 const SYSTEM_PROMPT = `You are GrammarFlee, the world's most enthusiastic language destroyer. Your mission is to take clean, well-written text and gleefully corrupt it according to the chaos levels specified by the user.
 
@@ -38,17 +40,21 @@ For the startIndex values, count carefully from the very beginning of destroyedT
 Be creative and sarcastic with explanations. Have fun with it!`;
 
 router.post("/mangle", async (req, res) => {
-  const parseResult = MangleTextBody.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({
-      error: "validation_error",
-      message: parseResult.error.message,
+  if (!HF_TOKEN) {
+    res.status(503).json({
+      error: "not_configured",
+      message: "HuggingFace token is not configured on the server. Set the HF_TOKEN secret.",
     });
     return;
   }
 
-  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos, apiKey, model } =
-    parseResult.data;
+  const parseResult = MangleTextBody.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: "validation_error", message: parseResult.error.message });
+    return;
+  }
+
+  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos } = parseResult.data;
 
   if (!text.trim()) {
     res.status(400).json({ error: "empty_text", message: "Text cannot be empty" });
@@ -68,17 +74,17 @@ ${text}
 
 Return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore". No markdown, no code blocks, no explanation outside the JSON.`;
 
-  const url = `${HF_BASE}/${model}/v1/chat/completions`;
+  const url = `${HF_BASE}/${HF_MODEL}/v1/chat/completions`;
 
   try {
     const hfRes = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${HF_TOKEN}`,
       },
       body: JSON.stringify({
-        model,
+        model: HF_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -90,35 +96,20 @@ Return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore"
     });
 
     if (hfRes.status === 401) {
-      res.status(401).json({
-        error: "invalid_token",
-        message: "Invalid HuggingFace token. Check your token at huggingface.co/settings/tokens.",
-      });
+      res.status(401).json({ error: "invalid_token", message: "Invalid HuggingFace token." });
       return;
     }
-
     if (hfRes.status === 404) {
-      res.status(404).json({
-        error: "model_not_found",
-        message: `Model "${model}" not found or doesn't support chat completions.`,
-      });
+      res.status(404).json({ error: "model_not_found", message: `Model "${HF_MODEL}" not found or doesn't support chat completions.` });
       return;
     }
-
     if (hfRes.status === 429) {
-      res.status(429).json({
-        error: "rate_limit",
-        message: "HuggingFace rate limit reached. Wait a moment and try again.",
-      });
+      res.status(429).json({ error: "rate_limit", message: "HuggingFace rate limit reached. Wait a moment and try again." });
       return;
     }
-
     if (!hfRes.ok) {
       const errText = await hfRes.text();
-      res.status(502).json({
-        error: "hf_error",
-        message: `HuggingFace returned ${hfRes.status}: ${errText.slice(0, 200)}`,
-      });
+      res.status(502).json({ error: "hf_error", message: `HuggingFace returned ${hfRes.status}: ${errText.slice(0, 200)}` });
       return;
     }
 
@@ -140,10 +131,7 @@ Return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore"
     } catch {
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        res.status(500).json({
-          error: "parse_error",
-          message: "Model response was not valid JSON. Try a larger model or adjust chaos levels.",
-        });
+        res.status(500).json({ error: "parse_error", message: "Model response was not valid JSON. Try again." });
         return;
       }
       try {
@@ -156,20 +144,14 @@ Return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore"
 
     const validated = MangleTextResponse.safeParse(parsed);
     if (!validated.success) {
-      res.status(500).json({
-        error: "schema_error",
-        message: "Model response didn't match expected schema: " + validated.error.message,
-      });
+      res.status(500).json({ error: "schema_error", message: "Model response didn't match schema: " + validated.error.message });
       return;
     }
 
     res.json(validated.data);
   } catch (err: unknown) {
     if (err instanceof TypeError && err.message.includes("fetch")) {
-      res.status(503).json({
-        error: "network_error",
-        message: "Could not reach HuggingFace API. Check your internet connection.",
-      });
+      res.status(503).json({ error: "network_error", message: "Could not reach HuggingFace API." });
     } else if (err instanceof Error) {
       res.status(500).json({ error: "api_error", message: err.message });
     } else {

@@ -53,8 +53,6 @@ export const MangleTextBody = zod.object({
     .min(mangleTextBodyWordOrderChaosMin)
     .max(mangleTextBodyWordOrderChaosMax)
     .describe("Intensity of word order destruction (0-100)"),
-  apiKey: zod.string().describe("HuggingFace API token"),
-  model: zod.string().describe("HuggingFace model ID"),
 });
 
 export const mangleTextResponseChaosScoreMin = 0;
