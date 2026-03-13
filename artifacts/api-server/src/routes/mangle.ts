@@ -3,8 +3,7 @@ import { MangleTextBody, MangleTextResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
+const HF_BASE = "https://api-inference.huggingface.co/models";
 
 const SYSTEM_PROMPT = `You are GrammarFlee, the world's most enthusiastic language destroyer. Your mission is to take clean, well-written text and gleefully corrupt it according to the chaos levels specified by the user.
 
@@ -48,14 +47,11 @@ router.post("/mangle", async (req, res) => {
     return;
   }
 
-  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos } =
+  const { text, spellingChaos, punctuationChaos, grammarChaos, wordOrderChaos, apiKey, model } =
     parseResult.data;
 
   if (!text.trim()) {
-    res.status(400).json({
-      error: "empty_text",
-      message: "Text cannot be empty",
-    });
+    res.status(400).json({ error: "empty_text", message: "Text cannot be empty" });
     return;
   }
 
@@ -70,49 +66,73 @@ Text to mangle:
 ${text}
 """
 
-Remember: return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore". No markdown, no code blocks, no explanation.`;
+Return ONLY a JSON object with "destroyedText", "errors" array, and "chaosScore". No markdown, no code blocks, no explanation outside the JSON.`;
+
+  const url = `${HF_BASE}/${model}/v1/chat/completions`;
 
   try {
-    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/chat`, {
+    const hfRes = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        stream: false,
+        model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
-        options: {
-          temperature: 0.8,
-          num_predict: 4096,
-        },
+        max_tokens: 4096,
+        temperature: 0.8,
+        stream: false,
       }),
     });
 
-    if (!ollamaRes.ok) {
-      const errText = await ollamaRes.text();
-      res.status(502).json({
-        error: "ollama_error",
-        message: `Ollama returned ${ollamaRes.status}: ${errText}`,
+    if (hfRes.status === 401) {
+      res.status(401).json({
+        error: "invalid_token",
+        message: "Invalid HuggingFace token. Check your token at huggingface.co/settings/tokens.",
       });
       return;
     }
 
-    const ollamaData = (await ollamaRes.json()) as {
-      message?: { content?: string };
+    if (hfRes.status === 404) {
+      res.status(404).json({
+        error: "model_not_found",
+        message: `Model "${model}" not found or doesn't support chat completions.`,
+      });
+      return;
+    }
+
+    if (hfRes.status === 429) {
+      res.status(429).json({
+        error: "rate_limit",
+        message: "HuggingFace rate limit reached. Wait a moment and try again.",
+      });
+      return;
+    }
+
+    if (!hfRes.ok) {
+      const errText = await hfRes.text();
+      res.status(502).json({
+        error: "hf_error",
+        message: `HuggingFace returned ${hfRes.status}: ${errText.slice(0, 200)}`,
+      });
+      return;
+    }
+
+    const hfData = (await hfRes.json()) as {
+      choices?: { message?: { content?: string } }[];
       error?: string;
     };
 
-    if (ollamaData.error) {
-      res.status(502).json({
-        error: "ollama_model_error",
-        message: ollamaData.error,
-      });
+    if (hfData.error) {
+      res.status(502).json({ error: "hf_model_error", message: hfData.error });
       return;
     }
 
-    const rawText = ollamaData.message?.content ?? "";
+    const rawText = hfData.choices?.[0]?.message?.content ?? "";
 
     let parsed: unknown;
     try {
@@ -122,47 +142,38 @@ Remember: return ONLY a JSON object with "destroyedText", "errors" array, and "c
       if (!jsonMatch) {
         res.status(500).json({
           error: "parse_error",
-          message: "Model response was not valid JSON. Try again or use a larger model.",
+          message: "Model response was not valid JSON. Try a larger model or adjust chaos levels.",
         });
         return;
       }
       try {
         parsed = JSON.parse(jsonMatch[0]);
       } catch {
-        res.status(500).json({
-          error: "parse_error",
-          message: "Could not parse JSON from model response.",
-        });
+        res.status(500).json({ error: "parse_error", message: "Could not parse JSON from model response." });
         return;
       }
     }
 
-    const validatedResult = MangleTextResponse.safeParse(parsed);
-    if (!validatedResult.success) {
+    const validated = MangleTextResponse.safeParse(parsed);
+    if (!validated.success) {
       res.status(500).json({
         error: "schema_error",
-        message: "Model response did not match expected schema: " + validatedResult.error.message,
+        message: "Model response didn't match expected schema: " + validated.error.message,
       });
       return;
     }
 
-    res.json(validatedResult.data);
+    res.json(validated.data);
   } catch (err: unknown) {
-    if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("ECONNREFUSED"))) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
       res.status(503).json({
-        error: "ollama_unreachable",
-        message: `Cannot reach Ollama at ${OLLAMA_HOST}. Make sure Ollama is running and try again.`,
+        error: "network_error",
+        message: "Could not reach HuggingFace API. Check your internet connection.",
       });
     } else if (err instanceof Error) {
-      res.status(500).json({
-        error: "api_error",
-        message: err.message,
-      });
+      res.status(500).json({ error: "api_error", message: err.message });
     } else {
-      res.status(500).json({
-        error: "unknown_error",
-        message: "An unknown error occurred",
-      });
+      res.status(500).json({ error: "unknown_error", message: "An unknown error occurred" });
     }
   }
 });

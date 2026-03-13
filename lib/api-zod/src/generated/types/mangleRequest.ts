@@ -33,4 +33,8 @@ export interface MangleRequest {
    * @maximum 100
    */
   wordOrderChaos: number;
+  /** HuggingFace API token */
+  apiKey: string;
+  /** HuggingFace model ID */
+  model: string;
 }

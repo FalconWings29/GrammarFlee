@@ -1,8 +1,8 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap, AlertTriangle, Type, PenTool, BookOpen, Shuffle,
-  Activity, X, ChevronRight
+  Activity, X, ChevronRight, Settings, Eye, EyeOff, CheckCircle2, Cpu
 } from "lucide-react";
 
 interface MangleError {
@@ -33,6 +33,14 @@ interface ActiveError {
   y: number;
 }
 
+interface AIConfig {
+  token: string;
+  model: string;
+}
+
+const DEFAULT_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
+const STORAGE_KEY = "grammarflee_ai_config";
+
 const ERROR_ICONS = {
   spelling: Type,
   punctuation: PenTool,
@@ -56,12 +64,143 @@ const SARCASTIC_LOADING = [
   "Converting English to Chaos...",
 ];
 
+function loadConfig(): AIConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { token: "", model: DEFAULT_MODEL };
+}
+
+function saveConfig(config: AIConfig) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+function ConfigModal({ onClose, onSave }: { onClose: () => void; onSave: (c: AIConfig) => void }) {
+  const [token, setToken] = useState(() => loadConfig().token);
+  const [model, setModel] = useState(() => loadConfig().model || DEFAULT_MODEL);
+  const [showToken, setShowToken] = useState(false);
+
+  const handleSave = () => {
+    const config = { token: token.trim(), model: model.trim() || DEFAULT_MODEL };
+    saveConfig(config);
+    onSave(config);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.93, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.93, y: 12 }}
+        transition={{ duration: 0.18 }}
+        className="relative w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+        style={{
+          backgroundColor: "hsl(220, 14%, 9%)",
+          borderColor: "hsl(220, 10%, 18%)",
+          boxShadow: "0 0 0 1px rgba(255,102,0,0.15), 0 24px 60px rgba(0,0,0,0.8)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-[hsl(220,8%,45%)] hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#ff660020] border border-[#ff660033]">
+            <Cpu className="w-4.5 h-4.5 text-[#ff6600]" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-[hsl(30,10%,90%)]">Configure AI</h2>
+            <p className="text-xs text-[hsl(220,8%,50%)]">HuggingFace Inference API</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-[hsl(220,8%,60%)] uppercase tracking-wider">
+              HuggingFace Token
+            </label>
+            <div className="relative">
+              <input
+                type={showToken ? "text" : "password"}
+                placeholder="hf_..."
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                className="w-full text-sm bg-[hsl(220,12%,13%)] border border-[hsl(220,10%,20%)] rounded-lg px-3 py-2.5 pr-10 text-[hsl(30,10%,85%)] placeholder:text-[hsl(220,8%,35%)] focus:outline-none focus:border-[#ff6600] focus:ring-1 focus:ring-[#ff660033] transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(220,8%,45%)] hover:text-[hsl(30,10%,70%)] transition-colors"
+              >
+                {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <p className="text-xs text-[hsl(220,8%,40%)]">
+              Get a free token at{" "}
+              <a
+                href="https://huggingface.co/settings/tokens"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#ff6600] hover:underline"
+              >
+                huggingface.co/settings/tokens
+              </a>
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-[hsl(220,8%,60%)] uppercase tracking-wider">
+              Model
+            </label>
+            <input
+              type="text"
+              placeholder={DEFAULT_MODEL}
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full text-sm bg-[hsl(220,12%,13%)] border border-[hsl(220,10%,20%)] rounded-lg px-3 py-2.5 text-[hsl(30,10%,85%)] placeholder:text-[hsl(220,8%,35%)] focus:outline-none focus:border-[#ff6600] focus:ring-1 focus:ring-[#ff660033] transition-colors font-mono"
+            />
+            <p className="text-xs text-[hsl(220,8%,40%)]">
+              Any HuggingFace chat model. Default: Mistral-7B-Instruct-v0.3
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-[hsl(220,10%,22%)] text-[hsl(220,8%,55%)] hover:text-[hsl(30,10%,80%)] hover:border-[hsl(220,10%,30%)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!token.trim()}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            style={{
+              background: token.trim() ? "linear-gradient(135deg, #ff6600, #ff3300)" : undefined,
+              color: token.trim() ? "hsl(220, 14%, 7%)" : undefined,
+              backgroundColor: token.trim() ? undefined : "hsl(220, 12%, 15%)",
+            }}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Save & Connect
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function ChaosMeter({ score }: { score: number }) {
   const radius = 54;
   const circumference = Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
-
-  const hue = Math.round(120 - (score / 100) * 120);
   const color = score > 60 ? "#ff3333" : score > 30 ? "#ff8800" : "#33cc66";
 
   return (
@@ -119,19 +258,17 @@ function ChaosSlider({
   colorClass: string;
 }) {
   const pct = (value / 100) * 100;
-  const bg = `linear-gradient(to right, ${colorClass === "orange" ? "#ff6600" : "#ff3333"} ${pct}%, hsl(220, 10%, 20%) ${pct}%)`;
+  const accentColor = colorClass === "orange" ? "#ff6600" : "#ff3333";
+  const bg = `linear-gradient(to right, ${accentColor} ${pct}%, hsl(220, 10%, 20%) ${pct}%)`;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Icon className="w-3.5 h-3.5" style={{ color: colorClass === "orange" ? "#ff6600" : "#ff3333" }} />
+          <Icon className="w-3.5 h-3.5" style={{ color: accentColor }} />
           <span className="text-xs font-medium text-[hsl(30,10%,75%)]">{label}</span>
         </div>
-        <span
-          className="text-xs font-bold tabular-nums"
-          style={{ color: colorClass === "orange" ? "#ff6600" : "#ff3333" }}
-        >
+        <span className="text-xs font-bold tabular-nums" style={{ color: accentColor }}>
           {value}
         </span>
       </div>
@@ -218,9 +355,8 @@ function DestructionPane({
   isLoading: boolean;
   onErrorClick: (err: MangleError, x: number, y: number) => void;
 }) {
-  const loadingMsg = SARCASTIC_LOADING[Math.floor(Math.random() * SARCASTIC_LOADING.length)];
-
   if (isLoading) {
+    const loadingMsg = SARCASTIC_LOADING[Math.floor(Date.now() / 1000) % SARCASTIC_LOADING.length];
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <div className="relative w-16 h-16">
@@ -257,7 +393,6 @@ function DestructionPane({
   }
 
   const { destroyedText, errors } = result;
-
   const sortedErrors = [...errors].sort((a, b) => a.startIndex - b.startIndex);
 
   const segments: { text: string; error: MangleError | null }[] = [];
@@ -266,7 +401,6 @@ function DestructionPane({
   for (const err of sortedErrors) {
     const start = err.startIndex;
     const end = start + err.length;
-
     if (start < cursor) continue;
     if (start > cursor) {
       segments.push({ text: destroyedText.slice(cursor, start), error: null });
@@ -283,9 +417,7 @@ function DestructionPane({
     <div className="h-full overflow-y-auto p-1">
       <p className="text-base leading-8 text-[hsl(30,10%,85%)] whitespace-pre-wrap break-words font-serif select-text">
         {segments.map((seg, i) => {
-          if (!seg.error) {
-            return <span key={i}>{seg.text}</span>;
-          }
+          if (!seg.error) return <span key={i}>{seg.text}</span>;
           const cls = seg.error.type === "spelling" ? "squiggly-red" : "squiggly-orange";
           return (
             <span
@@ -305,26 +437,14 @@ function DestructionPane({
   );
 }
 
-function StatsSidebar({
-  result,
-}: {
-  result: MangleResponse | null;
-}) {
+function StatsSidebar({ result }: { result: MangleResponse | null }) {
   const chaosScore = result?.chaosScore ?? 0;
   const linguisticHealth = 100 - chaosScore;
 
-  const errorCounts = {
-    spelling: 0,
-    punctuation: 0,
-    grammar: 0,
-    wordOrder: 0,
-  };
-
+  const errorCounts = { spelling: 0, punctuation: 0, grammar: 0, wordOrder: 0 };
   if (result) {
     for (const err of result.errors) {
-      if (err.type in errorCounts) {
-        errorCounts[err.type]++;
-      }
+      if (err.type in errorCounts) errorCounts[err.type]++;
     }
   }
 
@@ -388,8 +508,7 @@ function StatsSidebar({
           {(["spelling", "punctuation", "grammar", "wordOrder"] as const).map((type) => {
             const Icon = ERROR_ICONS[type];
             const count = errorCounts[type];
-            const isSpelling = type === "spelling";
-            const color = isSpelling ? "#ff3333" : "#ff8800";
+            const color = type === "spelling" ? "#ff3333" : "#ff8800";
             return (
               <div
                 key={type}
@@ -438,16 +557,25 @@ export default function GrammarFlee() {
     grammar: 50,
     wordOrder: 50,
   });
+  const [aiConfig, setAiConfig] = useState<AIConfig>(loadConfig);
   const [result, setResult] = useState<MangleResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeError, setActiveError] = useState<ActiveError | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const isConfigured = Boolean(aiConfig.token);
 
   const handleMangle = useCallback(async () => {
     if (!inputText.trim()) {
       setError("Please enter some text to destroy.");
+      return;
+    }
+    if (!aiConfig.token) {
+      setError("Please configure your HuggingFace token first.");
+      setShowConfigModal(true);
       return;
     }
 
@@ -466,6 +594,8 @@ export default function GrammarFlee() {
           punctuationChaos: sliders.punctuation,
           grammarChaos: sliders.grammar,
           wordOrderChaos: sliders.wordOrder,
+          apiKey: aiConfig.token,
+          model: aiConfig.model || DEFAULT_MODEL,
         }),
       });
 
@@ -482,12 +612,10 @@ export default function GrammarFlee() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputText, sliders]);
+  }, [inputText, sliders, aiConfig]);
 
   const handleErrorClick = useCallback((err: MangleError, x: number, y: number) => {
-    setActiveError((prev) =>
-      prev?.error === err ? null : { error: err, x, y }
-    );
+    setActiveError((prev) => (prev?.error === err ? null : { error: err, x, y }));
   }, []);
 
   return (
@@ -512,17 +640,29 @@ export default function GrammarFlee() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-[hsl(220,8%,45%)]">
-          <div className="w-2 h-2 rounded-full bg-[#33cc66] shadow-[0_0_6px_#33cc66]" />
-          <span>Powered by Ollama</span>
-        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowConfigModal(true); }}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all hover:border-[#ff6600] hover:text-[#ff6600] group"
+          style={{
+            backgroundColor: "hsl(220, 12%, 12%)",
+            borderColor: isConfigured ? "#ff660044" : "hsl(220, 10%, 20%)",
+            color: isConfigured ? "#ff6600" : "hsl(220, 8%, 55%)",
+          }}
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Configure AI
+          {isConfigured ? (
+            <div className="w-1.5 h-1.5 rounded-full bg-[#33cc66] shadow-[0_0_6px_#33cc66]" />
+          ) : (
+            <div className="w-1.5 h-1.5 rounded-full bg-[#ff3333] shadow-[0_0_6px_#ff3333]" />
+          )}
+        </button>
       </header>
 
       {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT: Editor */}
         <div className="w-[42%] flex flex-col border-r border-[hsl(220,10%,14%)]">
-          {/* Chaos sliders */}
           <div className="px-5 py-4 border-b border-[hsl(220,10%,14%)] bg-[hsl(220,14%,8%)] flex-shrink-0">
             <div className="flex items-center gap-2 mb-3">
               <Activity className="w-4 h-4 text-[#ff6600]" />
@@ -531,38 +671,13 @@ export default function GrammarFlee() {
               </h2>
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-              <ChaosSlider
-                label="Spelling"
-                icon={Type}
-                value={sliders.spelling}
-                onChange={(v) => setSliders((s) => ({ ...s, spelling: v }))}
-                colorClass="red"
-              />
-              <ChaosSlider
-                label="Punctuation"
-                icon={PenTool}
-                value={sliders.punctuation}
-                onChange={(v) => setSliders((s) => ({ ...s, punctuation: v }))}
-                colorClass="orange"
-              />
-              <ChaosSlider
-                label="Grammar"
-                icon={BookOpen}
-                value={sliders.grammar}
-                onChange={(v) => setSliders((s) => ({ ...s, grammar: v }))}
-                colorClass="orange"
-              />
-              <ChaosSlider
-                label="Word Order"
-                icon={Shuffle}
-                value={sliders.wordOrder}
-                onChange={(v) => setSliders((s) => ({ ...s, wordOrder: v }))}
-                colorClass="orange"
-              />
+              <ChaosSlider label="Spelling" icon={Type} value={sliders.spelling} onChange={(v) => setSliders((s) => ({ ...s, spelling: v }))} colorClass="red" />
+              <ChaosSlider label="Punctuation" icon={PenTool} value={sliders.punctuation} onChange={(v) => setSliders((s) => ({ ...s, punctuation: v }))} colorClass="orange" />
+              <ChaosSlider label="Grammar" icon={BookOpen} value={sliders.grammar} onChange={(v) => setSliders((s) => ({ ...s, grammar: v }))} colorClass="orange" />
+              <ChaosSlider label="Word Order" icon={Shuffle} value={sliders.wordOrder} onChange={(v) => setSliders((s) => ({ ...s, wordOrder: v }))} colorClass="orange" />
             </div>
           </div>
 
-          {/* Text area */}
           <div className="flex-1 flex flex-col p-4 gap-3">
             <div className="flex items-center gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-[hsl(220,8%,55%)]">
@@ -595,13 +710,9 @@ export default function GrammarFlee() {
               whileTap={{ scale: isLoading ? 1 : 0.98 }}
               className="flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: isLoading
-                  ? "hsl(220, 12%, 15%)"
-                  : "linear-gradient(135deg, #ff6600, #ff3300)",
+                background: isLoading ? "hsl(220, 12%, 15%)" : "linear-gradient(135deg, #ff6600, #ff3300)",
                 color: isLoading ? "hsl(220, 8%, 55%)" : "hsl(220, 14%, 7%)",
-                boxShadow: isLoading
-                  ? "none"
-                  : "0 0 20px rgba(255, 102, 0, 0.3), 0 4px 12px rgba(0,0,0,0.4)",
+                boxShadow: isLoading ? "none" : "0 0 20px rgba(255, 102, 0, 0.3), 0 4px 12px rgba(0,0,0,0.4)",
               }}
             >
               <Zap className="w-4 h-4" />
@@ -629,17 +740,9 @@ export default function GrammarFlee() {
           <div className="flex-1 p-5 overflow-hidden">
             <div
               className="h-full bg-[hsl(220,12%,9%)] rounded-xl border border-[hsl(220,10%,15%)] p-6 overflow-y-auto"
-              style={{
-                boxShadow: result
-                  ? "inset 0 0 40px rgba(255, 51, 51, 0.04)"
-                  : "none",
-              }}
+              style={{ boxShadow: result ? "inset 0 0 40px rgba(255, 51, 51, 0.04)" : "none" }}
             >
-              <DestructionPane
-                result={result}
-                isLoading={isLoading}
-                onErrorClick={handleErrorClick}
-              />
+              <DestructionPane result={result} isLoading={isLoading} onErrorClick={handleErrorClick} />
             </div>
           </div>
         </div>
@@ -650,11 +753,18 @@ export default function GrammarFlee() {
 
       {/* Error popup */}
       {activeError && (
-        <MangleErrorPopup
-          activeError={activeError}
-          onClose={() => setActiveError(null)}
-        />
+        <MangleErrorPopup activeError={activeError} onClose={() => setActiveError(null)} />
       )}
+
+      {/* Config modal */}
+      <AnimatePresence>
+        {showConfigModal && (
+          <ConfigModal
+            onClose={() => setShowConfigModal(false)}
+            onSave={(config) => setAiConfig(config)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
